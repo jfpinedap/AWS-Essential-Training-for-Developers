@@ -1,0 +1,161 @@
+App
+AWSTemplateFormatVersion: 2010-09-09
+Parameters:
+  AppSubnetId:
+    Type: 'AWS::EC2::Subnet::Id'
+  DBSubnetId:
+    Type: 'AWS::EC2::Subnet::Id'
+  VPC:
+    Type: 'AWS::EC2::VPC::Id'
+  KeyPair:
+    Type: 'AWS::EC2::KeyPair::KeyName'
+  OwnerIp:
+    Type: String
+Metadata:
+  'AWS::CloudFormation::Designer':
+    bab3b089-66d5-4fcb-806c-2b39c9c9bbaa:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 240
+        'y': 150
+      z: 1
+      embeds: []
+      isassociatedwith:
+        - 9560036c-c04b-4cdd-b27b-2a4cd0e280fd
+        - 388b1971-269e-41f1-a695-79407997c966
+        - 3e39de7f-579d-46f4-9816-7baa07d0faeb
+    9560036c-c04b-4cdd-b27b-2a4cd0e280fd:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 420
+        'y': 150
+      z: 1
+      embeds: []
+    388b1971-269e-41f1-a695-79407997c966:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 60
+        'y': 90
+      z: 1
+      embeds: []
+    010e2de5-14e5-422a-b9bf-e369f4601ac4:
+      source:
+        id: 388b1971-269e-41f1-a695-79407997c966
+      target:
+        id: 388b1971-269e-41f1-a695-79407997c966
+      z: 1
+    74cce890-9923-4f52-88f6-69a56a08a972:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 60
+        'y': 210
+      z: 1
+      embeds: []
+      isassociatedwith:
+        - 388b1971-269e-41f1-a695-79407997c966
+    3e39de7f-579d-46f4-9816-7baa07d0faeb:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 510
+        'y': 90
+      z: 1
+      embeds: []
+Resources:
+  App:
+    Type: 'AWS::EC2::Instance'
+    Properties:
+      SubnetId: !Ref AppSubnetId
+      ImageId: ami-043097594a7df80ec
+      InstanceType: t2.micro
+      KeyName: !Ref KeyPair
+      SecurityGroupIds:
+        - !Ref PublicHttp
+        - !Ref InternalTraffic
+        - !Ref PublicSSH
+      Tags:
+        - Key: Name
+          Value: !Sub 'App-${AWS::StackName}'
+      UserData:
+        'Fn::Base64': !Sub |
+          #cloud-config
+          repo_update: true
+          repo_upgrade: all
+          packages:
+           - httpd
+          runcmd:
+            - sudo systemctl start httpd
+            - sudo systemctl enable httpd
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: bab3b089-66d5-4fcb-806c-2b39c9c9bbaa
+  DB:
+    Type: 'AWS::EC2::Instance'
+    Properties:
+      SubnetId: !Ref DBSubnetId
+      ImageId: ami-043097594a7df80ec
+      InstanceType: t2.micro
+      KeyName: !Ref KeyPair
+      SecurityGroupIds:
+        - !Ref InternalTraffic
+      Tags:
+        - Key: Name
+          Value: !Sub 'DB-${AWS::StackName}'
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 74cce890-9923-4f52-88f6-69a56a08a972
+  PublicHttp:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        CidrIp: !Ref OwnerIp
+        FromPort: '80'
+        ToPort: '80'
+        IpProtocol: tcp
+      GroupDescription: public access
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 9560036c-c04b-4cdd-b27b-2a4cd0e280fd
+  PublicSSH:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        CidrIp: !Ref OwnerIp
+        FromPort: '22'
+        ToPort: '22'
+        IpProtocol: tcp
+      GroupDescription: public ssh access
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 3e39de7f-579d-46f4-9816-7baa07d0faeb
+  InternalTraffic:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      VpcId: !Ref VPC
+      GroupDescription: internal access
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 388b1971-269e-41f1-a695-79407997c966
+  InternalTrafficRule:
+    Type: 'AWS::EC2::SecurityGroupIngress'
+    Properties:
+      GroupId: !Ref InternalTraffic
+      IpProtocol: All
+      SourceSecurityGroupId: !GetAtt 
+        - InternalTraffic
+        - GroupId
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 010e2de5-14e5-422a-b9bf-e369f4601ac4
+

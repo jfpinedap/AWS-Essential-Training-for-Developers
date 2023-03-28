@@ -1,0 +1,105 @@
+CF-VPC
+
+AWSTemplateFormatVersion: 2010-09-09
+Metadata:
+  'AWS::CloudFormation::Designer':
+    5e91e874-582c-4472-b68a-acca852cb245:
+      size:
+        width: 90
+        height: 90
+      position:
+        x: 350
+        'y': 50
+      z: 1
+      embeds: []
+    c3cb3e0c-7842-4673-8a05-3352b4d3499c:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 190
+        'y': 60
+      z: 1
+      embeds: []
+    e242e746-134d-4e00-add1-197437bc3edb:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 270
+        'y': -20
+      z: 1
+      embeds: []
+    133ef454-44f5-413b-bcdf-4e66c7b1b2cd:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 270
+        'y': 140
+      z: 1
+      embeds: []
+    6dd9f71f-16ba-450d-b861-96ad671a3ced:
+      source:
+        id: 5e91e874-582c-4472-b68a-acca852cb245
+      target:
+        id: c3cb3e0c-7842-4673-8a05-3352b4d3499c
+      z: 1
+Resources:
+  T6IGW:
+    Type: 'AWS::EC2::InternetGateway'
+    Properties: {}
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: c3cb3e0c-7842-4673-8a05-3352b4d3499c
+  T6VPC:
+    Type: 'AWS::EC2::VPC'
+    Properties:
+      CidrBlock: 10.0.0.0/16
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 5e91e874-582c-4472-b68a-acca852cb245
+  GatewayAttach:
+    Type: 'AWS::EC2::VPCGatewayAttachment'
+    Properties:
+      InternetGatewayId: !Ref T6IGW
+      VpcId: !Ref T6VPC
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 6dd9f71f-16ba-450d-b861-96ad671a3ced
+  FirstAZSubnets:
+    Type: 'AWS::CloudFormation::Stack'
+    Properties:
+      TemplateURL: !Ref SubnetsTemplate
+      Parameters:
+        AvailabilityZone: eu-central-1a
+        PublicSubnetCIDR: 10.0.10.0/24
+        DBSubnetCIDR: 10.0.11.0/24
+        VPC: !Ref T6VPC
+        IGW: !Ref T6IGW
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 133ef454-44f5-413b-bcdf-4e66c7b1b2cd
+    DependsOn:
+      - T6VPC
+      - T6IGW
+  SecondAZSubnets:
+    Type: 'AWS::CloudFormation::Stack'
+    Properties:
+      TemplateURL: !Ref SubnetsTemplate
+      Parameters:
+        AvailabilityZone: eu-central-1b
+        PublicSubnetCIDR: 10.0.20.0/24
+        DBSubnetCIDR: 10.0.21.0/24
+        VPC: !Ref T6VPC
+        IGW: !Ref T6IGW
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: e242e746-134d-4e00-add1-197437bc3edb
+    DependsOn:
+      - T6VPC
+      - T6IGW
+Parameters:
+  SubnetsTemplate:
+    Type: String
+

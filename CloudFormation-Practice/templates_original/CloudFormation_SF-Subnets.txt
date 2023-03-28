@@ -1,0 +1,175 @@
+SF-Subnets
+
+AWSTemplateFormatVersion: 2010-09-09
+Parameters:
+  AvailabilityZone:
+    Type: 'AWS::EC2::AvailabilityZone::Name'
+  PublicSubnetCIDR:
+    Type: String
+  DBSubnetCIDR:
+    Type: String
+  VPC:
+    Type: 'AWS::EC2::VPC::Id'
+  IGW:
+    Type: String
+Resources:
+  PublicSubnet:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      CidrBlock: !Ref PublicSubnetCIDR
+      VpcId: !Ref VPC
+      AvailabilityZone: !Ref AvailabilityZone
+      MapPublicIpOnLaunch: true
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 6a1b9ac6-c5b9-4548-ae6a-2b5e2a3e2262
+  DBSubnet:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      CidrBlock: !Ref DBSubnetCIDR
+      VpcId: !Ref VPC
+      AvailabilityZone: !Ref AvailabilityZone
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: c2e50a49-701d-412f-b075-a3d4d37be67b
+  DBRouteTableAssociation:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      SubnetId: !Ref DBSubnet
+      RouteTableId: !Ref DBRouteTable
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: d4210e13-3d90-4f1d-a015-8ee8747b2d85
+  DBRouteTable:
+    Type: 'AWS::EC2::RouteTable'
+    Properties:
+      VpcId: !Ref VPC
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: b40d29fa-2c02-4a0a-bd5e-296bc0e4ae5d
+  PublicRouteTableAssociation:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      SubnetId: !Ref PublicSubnet
+      RouteTableId: !Ref PublicRouteTable
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 2ae58c59-6407-4838-a0a0-e249fb2d49d1
+  PublicRouteTable:
+    Type: 'AWS::EC2::RouteTable'
+    Properties:
+      VpcId: !Ref VPC
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: fb99286b-8dc2-494a-b024-9dd92b8ef62e
+  PublicInternetRoute:
+    Type: 'AWS::EC2::Route'
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref IGW
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 5653e18d-07db-40a5-8f48-c5f340d8e689
+Metadata:
+  'AWS::CloudFormation::Designer':
+    6a1b9ac6-c5b9-4548-ae6a-2b5e2a3e2262:
+      size:
+        width: 140
+        height: 80
+      position:
+        x: 410
+        'y': 110
+      z: 1
+      embeds: []
+    c2e50a49-701d-412f-b075-a3d4d37be67b:
+      size:
+        width: 140
+        height: 80
+      position:
+        x: 240
+        'y': 110
+      z: 1
+      embeds: []
+    b40d29fa-2c02-4a0a-bd5e-296bc0e4ae5d:
+      size:
+        width: 130
+        height: 100
+      position:
+        x: 240
+        'y': 240
+      z: 1
+      embeds:
+        - e196ed8f-126a-48de-8c2c-ebdca0fd64cf
+    5653e18d-07db-40a5-8f48-c5f340d8e689:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 400
+        'y': 280
+      z: 1
+      parent: fb99286b-8dc2-494a-b024-9dd92b8ef62e
+      embeds: []
+      iscontainedinside:
+        - fb99286b-8dc2-494a-b024-9dd92b8ef62e
+        - fb99286b-8dc2-494a-b024-9dd92b8ef62e
+        - fb99286b-8dc2-494a-b024-9dd92b8ef62e
+        - fb99286b-8dc2-494a-b024-9dd92b8ef62e
+        - fb99286b-8dc2-494a-b024-9dd92b8ef62e
+    d4210e13-3d90-4f1d-a015-8ee8747b2d85:
+      source:
+        id: b40d29fa-2c02-4a0a-bd5e-296bc0e4ae5d
+      target:
+        id: c2e50a49-701d-412f-b075-a3d4d37be67b
+      z: 1
+    fb99286b-8dc2-494a-b024-9dd92b8ef62e:
+      size:
+        width: 170
+        height: 120
+      position:
+        x: 390
+        'y': 240
+      z: 0
+      embeds:
+        - 5653e18d-07db-40a5-8f48-c5f340d8e689
+        - 113919fd-c28e-4f50-9c0c-8936c6d49463
+    113919fd-c28e-4f50-9c0c-8936c6d49463:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 480
+        'y': 280
+      z: 1
+      parent: fb99286b-8dc2-494a-b024-9dd92b8ef62e
+      embeds: []
+      iscontainedinside:
+        - fb99286b-8dc2-494a-b024-9dd92b8ef62e
+        - fb99286b-8dc2-494a-b024-9dd92b8ef62e
+        - fb99286b-8dc2-494a-b024-9dd92b8ef62e
+        - fb99286b-8dc2-494a-b024-9dd92b8ef62e
+        - fb99286b-8dc2-494a-b024-9dd92b8ef62e
+    2ae58c59-6407-4838-a0a0-e249fb2d49d1:
+      source:
+        id: fb99286b-8dc2-494a-b024-9dd92b8ef62e
+      target:
+        id: 6a1b9ac6-c5b9-4548-ae6a-2b5e2a3e2262
+      z: 0
+    e196ed8f-126a-48de-8c2c-ebdca0fd64cf:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 260
+        'y': 270
+      z: 2
+      parent: b40d29fa-2c02-4a0a-bd5e-296bc0e4ae5d
+      embeds: []
+      iscontainedinside:
+        - b40d29fa-2c02-4a0a-bd5e-296bc0e4ae5d
+        - b40d29fa-2c02-4a0a-bd5e-296bc0e4ae5d
+        - b40d29fa-2c02-4a0a-bd5e-296bc0e4ae5d
+        - b40d29fa-2c02-4a0a-bd5e-296bc0e4ae5d
+        - b40d29fa-2c02-4a0a-bd5e-296bc0e4ae5d
+
