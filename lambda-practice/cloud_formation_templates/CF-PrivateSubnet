@@ -1,0 +1,76 @@
+AWSTemplateFormatVersion: 2010-09-09
+Parameters:
+  AvailabilityZone:
+    Type: 'AWS::EC2::AvailabilityZone::Name'
+  DBSubnetCIDR:
+    Type: String
+  VPC:
+    Type: 'AWS::EC2::VPC::Id'
+Resources:
+  DBSubnet:
+    Type: 'AWS::EC2::Subnet'
+    Properties:
+      CidrBlock: !Ref DBSubnetCIDR
+      VpcId: !Ref VPC
+      AvailabilityZone: !Ref AvailabilityZone
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: c2e50a49-701d-412f-b075-a3d4d37be67b
+  DBRouteTableAssociation:
+    Type: 'AWS::EC2::SubnetRouteTableAssociation'
+    Properties:
+      SubnetId: !Ref DBSubnet
+      RouteTableId: !Ref DBRouteTable
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: d4210e13-3d90-4f1d-a015-8ee8747b2d85
+  DBRouteTable:
+    Type: 'AWS::EC2::RouteTable'
+    Properties:
+      VpcId: !Ref VPC
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: b40d29fa-2c02-4a0a-bd5e-296bc0e4ae5d
+Metadata:
+  'AWS::CloudFormation::Designer':
+    c2e50a49-701d-412f-b075-a3d4d37be67b:
+      size:
+        width: 140
+        height: 80
+      position:
+        x: 240
+        'y': 110
+      z: 1
+      embeds: []
+    b40d29fa-2c02-4a0a-bd5e-296bc0e4ae5d:
+      size:
+        width: 130
+        height: 100
+      position:
+        x: 240
+        'y': 240
+      z: 1
+      embeds:
+        - e196ed8f-126a-48de-8c2c-ebdca0fd64cf
+    d4210e13-3d90-4f1d-a015-8ee8747b2d85:
+      source:
+        id: b40d29fa-2c02-4a0a-bd5e-296bc0e4ae5d
+      target:
+        id: c2e50a49-701d-412f-b075-a3d4d37be67b
+      z: 1
+    e196ed8f-126a-48de-8c2c-ebdca0fd64cf:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 260
+        'y': 270
+      z: 2
+      parent: b40d29fa-2c02-4a0a-bd5e-296bc0e4ae5d
+      embeds: []
+      iscontainedinside:
+        - b40d29fa-2c02-4a0a-bd5e-296bc0e4ae5d
+        - b40d29fa-2c02-4a0a-bd5e-296bc0e4ae5d
+        - b40d29fa-2c02-4a0a-bd5e-296bc0e4ae5d
+        - b40d29fa-2c02-4a0a-bd5e-296bc0e4ae5d
+        - b40d29fa-2c02-4a0a-bd5e-296bc0e4ae5d
