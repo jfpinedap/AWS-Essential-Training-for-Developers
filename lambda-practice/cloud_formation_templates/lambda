@@ -5,54 +5,65 @@ Resources:
     Properties:
       Code:
         ZipFile: |
+          import os
           import json
+          import logging
+
+          logger = logging.getLogger()
+          logger.setLevel(logging.DEBUG)
 
           def lambda_handler(event, context):
-              print('Hello, world!')
+              logger.info('## ENVIRONMENT VARIABLES')
+              logger.info(os.environ)
+              logger.debug('## EVENT')
+              logger.debug(event)
+              print("Hello, world!")
               return {
                   'statusCode': 200,
-                  'body': json.dumps('Hello from Lambda!')
+                  'body': json.dumps(event)
               }
       Handler: index.lambda_handler
-      Role: !GetAtt MyLambdaRole.Arn
-      Runtime: python3.8
-
-  MyLambdaRole:
+      Role: !GetAtt MyIamRole.Arn
+      Runtime: python3.9
+  MyLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${MyLambdaFunction}"
+      RetentionInDays: 7
+  MyIamRole:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
-        Version: '2012-10-17'
+        Version: "2012-10-17"
         Statement:
           - Effect: Allow
             Principal:
               Service: lambda.amazonaws.com
-            Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
-
-  MyLambdaRoleAttachment:
-    Type: AWS::Lambda::Permission
-    Properties:
-      Action: lambda:InvokeFunction
-      FunctionName: !Ref MyLambdaFunction
-      Principal: logs.amazonaws.com
-      SourceAccount: !Ref AWS::AccountId
-      SourceArn: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${MyLambdaFunction}:*'
-
-  MyLogGroup:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: !Sub '/aws/lambda/${MyLambdaFunction}'
-
-  MyLogStream:
-    Type: AWS::Logs::LogStream
-    Properties:
-      LogGroupName: !Ref MyLogGroup
-      LogStreamName: !Sub '${MyLambdaFunction}-${AWS::StackName}'
-
-  MyLambdaSubscriptionFilter:
-    Type: AWS::Logs::SubscriptionFilter
-    Properties:
-      DestinationArn: !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:${MyLambdaFunction}'
-      FilterPattern: ''
-      LogGroupName: !Ref MyLogGroup
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: AllowSNSAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sns:*
+                Resource: "*"
+        - PolicyName: AllowSQSAccess
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - sqs:*
+                Resource: "*"
+        - PolicyName: MyLambdaFunctionPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+            - Effect: Allow
+              Action:
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+              Resource: "*"
