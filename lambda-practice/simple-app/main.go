@@ -14,6 +14,7 @@ import (
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/lambda"
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/aws/aws-sdk-go/service/s3/s3manager"
 	"github.com/aws/aws-sdk-go/service/sns"
@@ -44,6 +45,7 @@ type Image struct {
 	LastUpdate time.Time `db:"last_update"`
 	Size       int64     `db:"size"`
 	Extension  string    `db:"extension"`
+	Link       string    `db:"link"`
 }
 
 func main() {
@@ -76,68 +78,38 @@ func main() {
 	router.HandleFunc("/image/random/metadata", getRandomMetadata).Methods("GET")
 	router.HandleFunc("/notification/subscription", subscribeEmail).Methods("GET")
 	router.HandleFunc("/notification/unsubscription", unsubscription).Methods("GET")
-
-	// Start the background process for sending SQS messages to SNS topic
-	go pollSQSAndSendToSNS(60)
+	router.HandleFunc("/lambda/trigger", lambdaTrigger).Methods("PUT")
 
 	// Start the web server
 	log.Fatal(http.ListenAndServe(":8080", router))
 }
 
-func pollSQSAndSendToSNS(pollIntervalSecs int) {
-	sqsClient := sqs.New(awsSession)
-	snsClient := sns.New(awsSession)
+func lambdaTrigger(w http.ResponseWriter, r *http.Request) {
+	// Create a new Lambda client
+	svc := lambda.New(awsSession)
 
-	// Set up polling interval
-	pollInterval := time.Duration(pollIntervalSecs) * time.Second
+	// Define the input payload for the Lambda function
+	payload := []byte(`{"detail-type": "Web Application"}`)
 
-	// Loop continuously, polling for messages and sending them to SNS
-	for {
-		// Poll SQS for up to 10 messages at a time
-		resp, err := sqsClient.ReceiveMessage(&sqs.ReceiveMessageInput{
-			QueueUrl:            aws.String(queueURL),
-			MaxNumberOfMessages: aws.Int64(10),
-			WaitTimeSeconds:     aws.Int64(20),
-		})
-		if err != nil {
-			log.Printf("Error receiving messages from SQS: %v\n", err)
-			time.Sleep(pollInterval)
-			continue
-		}
-
-		// If there are no messages, wait and continue
-		if len(resp.Messages) == 0 {
-			time.Sleep(pollInterval)
-			continue
-		}
-
-		// Send each message to the SNS topic
-		for _, msg := range resp.Messages {
-			_, err := snsClient.Publish(&sns.PublishInput{
-				Message:  aws.String(*msg.Body),
-				TopicArn: aws.String(topicARN),
-			})
-			if err != nil {
-				log.Printf("Error publishing message to SNS: %v\n", err)
-			} else {
-				log.Printf("Published message to SNS: %s\n", *msg.Body)
-			}
-
-			// Delete the message from SQS
-			_, err = sqsClient.DeleteMessage(&sqs.DeleteMessageInput{
-				QueueUrl:      aws.String(queueURL),
-				ReceiptHandle: msg.ReceiptHandle,
-			})
-			if err != nil {
-				log.Printf("Error deleting message from SQS: %v\n", err)
-			} else {
-				log.Printf("Deleted message from SQS: %s\n", *msg.Body)
-			}
-		}
-
-		// Wait for the polling interval
-		time.Sleep(pollInterval)
+	// Set the input parameters
+	input := &lambda.InvokeInput{
+		FunctionName:   aws.String("lambda-uploads-batch-notifier"),
+		InvocationType: aws.String("Event"),
+		Payload:        payload,
 	}
+
+	// Invoke the Lambda function
+	result, err := svc.Invoke(input)
+	if err != nil {
+		error_message := "Failed to invoke Lambda function. "
+		log.Println(error_message, err)
+		fmt.Fprintf(w, error_message)
+		return
+	}
+
+	success_message := "Lambda function successfully invoked. "
+	log.Println(success_message, result)
+	fmt.Fprintf(w, success_message)
 }
 
 func subscribeEmail(w http.ResponseWriter, r *http.Request) {
@@ -232,7 +204,7 @@ func getImage(w http.ResponseWriter, r *http.Request) {
 	// Create an S3 client and get the Image
 	file, err := s3.New(awsSession).GetObject(&s3.GetObjectInput{
 		Bucket: aws.String(s3Bucket),
-		Key:    aws.String(name),
+		Key:    aws.String(fmt.Sprintf("image/%s", name)),
 	})
 	if err != nil {
 		log.Println(err)
@@ -271,7 +243,7 @@ func uploadImage(w http.ResponseWriter, r *http.Request) {
 	uploader := s3manager.NewUploader(awsSession)
 	_, err = uploader.Upload(&s3manager.UploadInput{
 		Bucket: aws.String(s3Bucket),
-		Key:    aws.String(handler.Filename),
+		Key:    aws.String(fmt.Sprintf("image/%s", handler.Filename)),
 		Body:   imageFile,
 	})
 	if err != nil {
@@ -284,6 +256,7 @@ func uploadImage(w http.ResponseWriter, r *http.Request) {
 		Name:       handler.Filename,
 		Size:       handler.Size,
 		Extension:  getFileExtension(handler.Filename),
+		Link:       fmt.Sprintf("https://%s.s3.amazonaws.com/image/%s", s3Bucket, handler.Filename),
 		LastUpdate: time.Now(),
 	}
 	_, err = insertImage(image)
@@ -328,7 +301,7 @@ func deleteImage(w http.ResponseWriter, r *http.Request) {
 	// Delete image from S3
 	_, err := s3Svc.DeleteObject(&s3.DeleteObjectInput{
 		Bucket: aws.String(s3Bucket),
-		Key:    aws.String(name),
+		Key:    aws.String(fmt.Sprintf("image/%s", name)),
 	})
 	if err != nil {
 		log.Println(err)
@@ -378,6 +351,7 @@ func createTable() error {
 			name VARCHAR(255) NOT NULL,
 			size INT NOT NULL,
 			extension VARCHAR(255) NOT NULL,
+			link VARCHAR(255) NOT NULL,
 			last_update DATETIME NOT NULL,
 			PRIMARY KEY (id)
 		)`, dbTableName))
@@ -390,7 +364,7 @@ func createTable() error {
 
 func insertImage(image Image) (int64, error) {
 	stmt, err := db.Prepare(fmt.Sprintf(
-		"INSERT INTO %s(name, size, extension, last_update) VALUES( ?, ?, ?, ? )",
+		"INSERT INTO %s(name, size, extension, link, last_update) VALUES( ?, ?, ?, ?, ? )",
 		dbTableName,
 	))
 	if err != nil {
@@ -398,7 +372,7 @@ func insertImage(image Image) (int64, error) {
 	}
 	defer stmt.Close() // Prepared statements take up server resources and should be closed after use.
 
-	result, err := stmt.Exec(image.Name, image.Size, image.Extension, image.LastUpdate)
+	result, err := stmt.Exec(image.Name, image.Size, image.Extension, image.Link, image.LastUpdate)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -414,7 +388,7 @@ func insertImage(image Image) (int64, error) {
 
 func getAllImages() ([]Image, error) {
 	stmt, err := db.Prepare(fmt.Sprintf(
-		"SELECT name, size, extension, last_update FROM %s",
+		"SELECT name, size, extension, link, last_update FROM %s",
 		dbTableName,
 	))
 	if err != nil {
@@ -436,6 +410,7 @@ func getAllImages() ([]Image, error) {
 			&image.Name,
 			&image.Size,
 			&image.Extension,
+			&image.Link,
 			&lastUpdateStr,
 		); err != nil {
 			log.Fatal(err)
@@ -452,7 +427,7 @@ func getAllImages() ([]Image, error) {
 
 func getRandomImage() (Image, error) {
 	stmt, err := db.Prepare(fmt.Sprintf(
-		"SELECT name, size, extension, last_update FROM %s ORDER BY RAND() LIMIT 1",
+		"SELECT name, size, extension, link, last_update FROM %s ORDER BY RAND() LIMIT 1",
 		dbTableName,
 	))
 	if err != nil {
@@ -467,6 +442,7 @@ func getRandomImage() (Image, error) {
 		&image.Name,
 		&image.Size,
 		&image.Extension,
+		&image.Link,
 		&lastUpdateStr,
 	)
 	image.LastUpdate, _ = time.Parse(timeLayout, lastUpdateStr)
@@ -507,6 +483,7 @@ func logImages(images []Image) {
 			image.Name,
 			image.Size,
 			image.Extension,
+			image.Link,
 			image.LastUpdate,
 		)
 	}

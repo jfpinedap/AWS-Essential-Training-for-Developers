@@ -1,0 +1,58 @@
+AWSTemplateFormatVersion: 2010-09-09
+Resources:
+  MyLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Code:
+        ZipFile: |
+          import json
+
+          def lambda_handler(event, context):
+              body_response = 'Hello from my Lambda function!'
+              detail_type = "Request Resource: " + event.get("detail-type", "null")
+              print(detail_type)
+              print(body_response)
+              return {"statusCode": 200, "body": body_response, "detail-type": detail_type}
+      Handler: index.lambda_handler
+      Role: !GetAtt MyLambdaRole.Arn
+      Runtime: python3.9
+
+  MyLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: MyLambdaPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: arn:aws:logs:*:*:*
+
+  MyEventRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Description: 'Schedule Lambda function to run every minutes'
+      ScheduleExpression: 'cron(*/1 * * * ? *)'
+      State: 'ENABLED'
+      Targets:
+        - Arn: !GetAtt MyLambdaFunction.Arn
+          Id: 'TargetFunctionV1'
+
+  MyPermission:
+    Type: "AWS::Lambda::Permission"
+    Properties:
+      Action: "lambda:InvokeFunction"
+      FunctionName: !Ref MyLambdaFunction
+      Principal: "events.amazonaws.com"
+      SourceArn: !GetAtt MyEventRule.Arn

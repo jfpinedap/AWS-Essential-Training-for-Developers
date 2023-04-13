@@ -1,0 +1,416 @@
+AWSTemplateFormatVersion: 2010-09-09
+Parameters:
+  AppSubnetId:
+    Type: 'AWS::EC2::Subnet::Id'
+  DBSubnetId:
+    Type: 'AWS::EC2::Subnet::Id'
+  VPC:
+    Type: 'AWS::EC2::VPC::Id'
+  KeyPair:
+    Type: 'AWS::EC2::KeyPair::KeyName'
+  OwnerIp:
+    Type: String
+  SubnetIds:
+    Type: 'List<AWS::EC2::Subnet::Id>'
+    Description: List of subnet IDs where the RDS will be deployed
+  DBUsername:
+    Type: String
+    Description: Username for the database
+  DBPassword:
+    Type: String
+    NoEcho: true
+    Description: Password for the database
+  S3Bucket:
+    Type: String
+    Description: Name of the S3 bucket where the .jar file is located
+  AvailabilityZone:
+    Type: 'AWS::EC2::AvailabilityZone::Name'
+    Description: The availability zone in which to create the RDS instance.
+Metadata:
+  'AWS::CloudFormation::Designer':
+    bab3b089-66d5-4fcb-806c-2b39c9c9bbaa:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 240
+        'y': 150
+      z: 1
+      embeds: []
+      isassociatedwith:
+        - 9560036c-c04b-4cdd-b27b-2a4cd0e280fd
+        - 388b1971-269e-41f1-a695-79407997c966
+        - 3e39de7f-579d-46f4-9816-7baa07d0faeb
+    9560036c-c04b-4cdd-b27b-2a4cd0e280fd:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 420
+        'y': 150
+      z: 1
+      embeds: []
+    388b1971-269e-41f1-a695-79407997c966:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 60
+        'y': 90
+      z: 1
+      embeds: []
+    010e2de5-14e5-422a-b9bf-e369f4601ac4:
+      source:
+        id: 388b1971-269e-41f1-a695-79407997c966
+      target:
+        id: 388b1971-269e-41f1-a695-79407997c966
+      z: 1
+    74cce890-9923-4f52-88f6-69a56a08a972:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 60
+        'y': 210
+      z: 1
+      embeds: []
+    3e39de7f-579d-46f4-9816-7baa07d0faeb:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 510
+        'y': 90
+      z: 1
+      embeds: []
+    ddd79ce1-f625-4ce0-9202-e2e005ade75b:
+      size:
+        width: 150
+        height: 150
+      position:
+        x: 120
+        'y': 150
+      z: 1
+      embeds: []
+    66c6ec57-3e0d-4080-b3f3-02d4990d7ed6:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 150
+        'y': 330
+      z: 1
+      embeds: []
+    6693f1e5-53df-4e1f-9121-c4ddf4a9c156:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 330
+        'y': 240
+      z: 1
+      embeds: []
+    465c36bb-7c20-4aa6-843e-46e4278bc6da:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 600
+        'y': 100
+      z: 1
+      embeds: []
+    613e737a-c0bd-49a5-972c-e46ee686c0ba:
+      size:
+        width: 60
+        height: 60
+      position:
+        x: 510
+        'y': 210
+      z: 1
+      embeds: []
+Resources:
+  PublicHttp:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 8080
+          ToPort: 8080
+          CidrIp: 0.0.0.0/0
+      GroupDescription: Allow Public TCP access through port 8080
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 9560036c-c04b-4cdd-b27b-2a4cd0e280fd
+  PublicSSH:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        CidrIp: !Ref OwnerIp
+        FromPort: '22'
+        ToPort: '22'
+        IpProtocol: tcp
+      GroupDescription: 'Allow Public TCP access through port 22, only by the Ower IP'
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 3e39de7f-579d-46f4-9816-7baa07d0faeb
+  InternalTraffic:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      VpcId: !Ref VPC
+      GroupDescription: Allow internal access
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 388b1971-269e-41f1-a695-79407997c966
+  InternalTrafficRule:
+    Type: 'AWS::EC2::SecurityGroupIngress'
+    Properties:
+      GroupId: !Ref InternalTraffic
+      IpProtocol: All
+      SourceSecurityGroupId: !GetAtt
+        - InternalTraffic
+        - GroupId
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 010e2de5-14e5-422a-b9bf-e369f4601ac4
+  UploadsNotificationQueue:
+    Type: 'AWS::SQS::Queue'
+    Properties:
+      QueueName: uploads-notification-queue
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 613e737a-c0bd-49a5-972c-e46ee686c0ba
+  UploadsNotificationTopic:
+    Type: 'AWS::SNS::Topic'
+    Properties:
+      TopicName: uploads-notification-topic
+      DisplayName: Uploads Notification Topic
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 465c36bb-7c20-4aa6-843e-46e4278bc6da
+  EC2Role:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Action: 'sts:AssumeRole'
+            Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+        Version: 2012-10-17
+      Path: /
+      Policies:
+        - PolicyName: S3_RDS_SSM_SQS_SNS_AccessPolicy
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action: 'lambda:InvokeFunction'
+                Resource: !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:lambda-uploads-batch-notifier'
+              - Effect: Allow
+                Action:
+                  - 'ssm:*'
+                Resource: !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/*'
+              - Effect: Allow
+                Action:
+                  - 'sqs:*'
+                Resource: !GetAtt UploadsNotificationQueue.Arn
+              - Effect: Allow
+                Action:
+                  - 'sns:*'
+                Resource: !GetAtt UploadsNotificationTopic.TopicArn
+              - Effect: Allow
+                Action:
+                  - 'rds:*'
+                Resource: !GetAtt RDSInstance.DBInstanceArn
+              - Effect: Allow
+                Action:
+                  - 's3:*'
+                Resource:
+                  - !Join
+                    - ''
+                    - - 'arn:aws:s3:::'
+                      - !Ref S3Bucket
+                  - !Join
+                    - ''
+                    - - 'arn:aws:s3:::'
+                      - !Ref S3Bucket
+                      - /*
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 66c6ec57-3e0d-4080-b3f3-02d4990d7ed6
+  EC2RoleInstanceProfile:
+    Type: 'AWS::IAM::InstanceProfile'
+    Properties:
+      Path: /
+      Roles:
+        - !Ref EC2Role
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 6693f1e5-53df-4e1f-9121-c4ddf4a9c156
+  RDSSubnetGroup:
+    Type: 'AWS::RDS::DBSubnetGroup'
+    Properties:
+      DBSubnetGroupDescription: RDS Subnet Group
+      SubnetIds: !Ref SubnetIds
+      Tags:
+        - Key: Name
+          Value: RDS Subnet Group
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: ddd79ce1-f625-4ce0-9202-e2e005ade75b
+  RDSInstance:
+    Type: 'AWS::RDS::DBInstance'
+    Properties:
+      Engine: mysql
+      EngineVersion: '8.0'
+      DBInstanceIdentifier: database-rsd
+      DBInstanceClass: db.t3.micro
+      DBName: KProject
+      AllocatedStorage: '20'
+      MaxAllocatedStorage: 40
+      StorageType: gp2
+      MasterUsername: !Ref DBUsername
+      MasterUserPassword: !Ref DBPassword
+      DBSubnetGroupName: !Ref RDSSubnetGroup
+      VPCSecurityGroups:
+        - !Ref InternalTraffic
+      AvailabilityZone: !Ref AvailabilityZone
+      MultiAZ: false
+      PubliclyAccessible: false
+      Port: 3306
+      PreferredMaintenanceWindow: 'Sun:01:00-Sun:02:00'
+      BackupRetentionPeriod: 7
+      PreferredBackupWindow: '22:00-23:00'
+      Tags:
+        - Key: Name
+          Value: RDS Instance
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 74cce890-9923-4f52-88f6-69a56a08a972
+  SimpleApp:
+    Type: 'AWS::EC2::Instance'
+    Properties:
+      SubnetId: !Ref AppSubnetId
+      ImageId: ami-069aabeee6f53e7bf
+      InstanceType: t2.micro
+      KeyName: !Ref KeyPair
+      IamInstanceProfile: !Ref EC2RoleInstanceProfile
+      SecurityGroupIds:
+        - !Ref PublicHttp
+        - !Ref InternalTraffic
+        - !Ref PublicSSH
+      Tags:
+        - Key: Name
+          Value: !Sub 'SimpleApp-${AWS::StackName}'
+      UserData:
+        'Fn::Base64': !Join
+          - ''
+          - - |
+              #!/bin/bash
+            - |
+              yum update -y
+            - |
+              yum install -y mysql
+            - |
+              yum install -y golang
+            - |
+              cd
+            - 'aws s3 sync s3://'
+            - !Ref S3Bucket
+            - |
+              /simple-app/ /home/ec2-user/simple-app/
+            - |
+              cd /home/ec2-user/simple-app/
+            - |
+              sudo go mod init main.go
+            - |
+              sudo go mod tidy
+            - |
+              sudo go run main.go &
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: bab3b089-66d5-4fcb-806c-2b39c9c9bbaa
+  S3BucketParameter:
+    Type: 'AWS::SSM::Parameter'
+    Properties:
+      Name: s3Bucket
+      Value: !Ref S3Bucket
+      Type: String
+      Tier: Standard
+  DBUSERParameter:
+    Type: 'AWS::SSM::Parameter'
+    Properties:
+      Name: dbUser
+      Value: !Ref DBUsername
+      Type: String
+      Tier: Standard
+  DBPASSParameter:
+    Type: 'AWS::SSM::Parameter'
+    Properties:
+      Name: dbPass
+      Value: !Ref DBPassword
+      Type: String
+      Tier: Standard
+  DBHOSTParameter:
+    Type: 'AWS::SSM::Parameter'
+    Properties:
+      Name: dbHost
+      Value: !GetAtt RDSInstance.Endpoint.Address
+      Type: String
+      Tier: Standard
+  DBPORTParameter:
+    Type: 'AWS::SSM::Parameter'
+    Properties:
+      Name: dbPort
+      Value: 3306
+      Type: String
+      Tier: Standard
+  DBNAMEParameter:
+    Type: 'AWS::SSM::Parameter'
+    Properties:
+      Name: dbName
+      Value: KProject
+      Type: String
+      Tier: Standard
+  DBTABLENAMEParameter:
+    Type: 'AWS::SSM::Parameter'
+    Properties:
+      Name: dbTableName
+      Value: image
+      Type: String
+      Tier: Standard
+  TopicParameter:
+    Type: 'AWS::SSM::Parameter'
+    Properties:
+      Name: topicARN
+      Value: !GetAtt UploadsNotificationTopic.TopicArn
+      Type: String
+      Tier: Standard
+  QueueURLParameter:
+    Type: 'AWS::SSM::Parameter'
+    Properties:
+      Name: queueURL
+      Value: !GetAtt UploadsNotificationQueue.QueueUrl
+      Type: String
+      Tier: Standard
+Outputs:
+  RDSInstanceEndpoint:
+    Description: Endpoint for RDS Instance
+    Value: !Join
+      - ''
+      - - 'jdbc:mysql://'
+        - !GetAtt RDSInstance.Endpoint.Address
+        - ':'
+        - !GetAtt RDSInstance.Endpoint.Port
+        - /KProject
+  EC2InstanceSimpleAppPublicIP:
+    Value: !GetAtt SimpleApp.PublicIp
+  EC2InstanceSimpleAppPublicDNS:
+    Value: !GetAtt SimpleApp.PublicDnsName
+  QueueArn:
+    Value: !GetAtt UploadsNotificationQueue.Arn
+  QueueUrl:
+    Value: !GetAtt UploadsNotificationQueue.QueueUrl
+  TopicArn:
+    Value: !GetAtt UploadsNotificationTopic.TopicArn

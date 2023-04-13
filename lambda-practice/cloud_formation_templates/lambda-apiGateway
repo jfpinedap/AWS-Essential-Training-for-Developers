@@ -1,0 +1,167 @@
+AWSTemplateFormatVersion: 2010-09-09
+Parameters:
+  OwnerIP:
+    Type: String
+  S3Bucket:
+    Type: String
+    Description: Name of the S3 Bucket where the .zip with lambda code is located
+  S3Key:
+    Type: String
+    Description: Name of the S3 Key where the .zip with lambda code is located
+  TopicArn:
+    Type: String
+    Description: 'The ARN of the SNS topic'
+  QueueArn:
+    Type: String
+    Description: 'The ARN of the SQS queue'
+  QueueUrl:
+    Type: String
+    Description: The name of the queue URL.
+
+Resources:
+  MyLambdaFunction:
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      FunctionName: lambda-uploads-batch-notifier
+      Code:
+        S3Bucket: !Ref S3Bucket
+        S3Key: !Ref S3Key
+      Handler: main.lambda_handler
+      Role: !GetAtt MyLambdaExecutionRole.Arn
+      Runtime: python3.9
+      Timeout: 10
+      Environment:
+        Variables:
+          SNS_TOPIC_ARN: !Ref TopicArn
+          SQS_QUEUE_URL: !Ref QueueUrl
+    DependsOn: MyLambdaExecutionRole
+
+  MyLambdaExecutionRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Path: /
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+      Policies:
+        - PolicyName: SQSQueueAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'sqs:*'
+                Resource: !Ref QueueArn
+        - PolicyName: SNSTopicAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'sns:*'
+                Resource: !Ref TopicArn
+        - PolicyName: MyLambdaFunctionPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+            - Effect: Allow
+              Action:
+                - logs:CreateLogGroup
+                - logs:CreateLogStream
+                - logs:PutLogEvents
+              Resource: arn:aws:logs:*:*:*
+
+  MyLambdaExecutionPolicy:
+    Type: 'AWS::IAM::Policy'
+    Properties:
+      PolicyName: LambdaExecutionPolicy
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Action: 'lambda:InvokeFunction'
+            Resource: !GetAtt MyLambdaFunction.Arn
+      Roles:
+        - !Ref MyLambdaExecutionRole
+
+  MyRestApi:
+    Type: 'AWS::ApiGateway::RestApi'
+    Properties:
+      Name: My API Gateway
+      Policy:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: '*'
+            Action: execute-api:Invoke
+            Resource: "execute-api:/*"
+            Condition:
+              IpAddress:
+                aws:SourceIp: !Ref OwnerIP
+
+  MyResource:
+    Type: 'AWS::ApiGateway::Resource'
+    Properties:
+      RestApiId: !Ref MyRestApi
+      ParentId: !GetAtt MyRestApi.RootResourceId
+      PathPart: api_uploads-batch-notifier
+
+  MyMethod:
+    Type: 'AWS::ApiGateway::Method'
+    Properties:
+      RestApiId: !Ref MyRestApi
+      ResourceId: !Ref MyResource
+      HttpMethod: GET
+      AuthorizationType: NONE
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${MyLambdaFunction.Arn}/invocations
+      MethodResponses:
+        - StatusCode: '200'
+      RequestParameters:
+        method.request.header.X-Forwarded-For: true
+
+  MyDeployment:
+    Type: 'AWS::ApiGateway::Deployment'
+    DependsOn: MyMethod
+    Properties:
+      RestApiId: !Ref MyRestApi
+      StageName: dev
+
+  MyLambdaPermission:
+    Type: 'AWS::Lambda::Permission'
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref MyLambdaFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${MyRestApi}/*/GET/api_uploads-batch-notifier
+
+  MyEventRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Description: 'Schedule Lambda function to run every 5 minutes'
+      ScheduleExpression: 'cron(*/5 * * * ? *)'
+      State: 'ENABLED'
+      Targets:
+        - Arn: !GetAtt MyLambdaFunction.Arn
+          Id: 'TargetFunctionV1'
+
+  TriggerPermission:
+    Type: "AWS::Lambda::Permission"
+    Properties:
+      Action: "lambda:InvokeFunction"
+      FunctionName: !Ref MyLambdaFunction
+      Principal: "events.amazonaws.com"
+      SourceArn: !GetAtt MyEventRule.Arn
+
+Outputs:
+  ApiGatewayEndpoint:
+    Value: !Sub 'https://${MyRestApi}.execute-api.${AWS::Region}.amazonaws.com/dev/api_uploads-batch-notifier'
+    Description: The URL of the API Gateway endpoint

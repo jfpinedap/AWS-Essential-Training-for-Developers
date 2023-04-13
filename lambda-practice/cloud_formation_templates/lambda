@@ -1,63 +1,75 @@
 AWSTemplateFormatVersion: 2010-09-09
+Parameters:
+  S3Bucket:
+    Type: String
+    Description: Name of the S3 Bucket where the .zip with lambda code is located
+  S3Key:
+    Type: String
+    Description: Name of the S3 Key where the .zip with lambda code is located
+  TopicArn:
+    Type: String
+    Description: 'The ARN of the SNS topic'
+  QueueArn:
+    Type: String
+    Description: 'The ARN of the SQS queue'
+  QueueUrl:
+    Type: String
+    Description: The name of the queue URL.
+
 Resources:
-  MyLambdaFunction:
-    Type: AWS::Lambda::Function
+  LambdaFunction:
+    Type: 'AWS::Lambda::Function'
     Properties:
+      FunctionName: lambda-uploads-batch-notifier
       Code:
-        ZipFile: |
-          import os
-          import json
-          import logging
-
-          logger = logging.getLogger()
-          logger.setLevel(logging.DEBUG)
-
-          def lambda_handler(event, context):
-              logger.info('## ENVIRONMENT VARIABLES')
-              logger.info(os.environ)
-              logger.debug('## EVENT')
-              logger.debug(event)
-              print("Hello, world!")
-              return {
-                  'statusCode': 200,
-                  'body': json.dumps(event)
-              }
-      Handler: index.lambda_handler
-      Role: !GetAtt MyIamRole.Arn
+        S3Bucket: !Ref S3Bucket
+        S3Key: !Ref S3Key
+      Handler: main.lambda_handler
+      Role: !GetAtt LambdaExecutionRole.Arn
       Runtime: python3.9
-  MyLogGroup:
+      Timeout: 10
+      Environment:
+        Variables:
+          SNS_TOPIC_ARN: !Ref TopicArn
+          SQS_QUEUE_URL: !Ref QueueUrl
+    DependsOn: LambdaExecutionRole
+
+  LambdaLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub "/aws/lambda/${MyLambdaFunction}"
+      LogGroupName: !Sub "/aws/lambda/${LambdaFunction}"
       RetentionInDays: 7
-  MyIamRole:
-    Type: AWS::IAM::Role
+
+  LambdaExecutionRole:
+    Type: 'AWS::IAM::Role'
     Properties:
       AssumeRolePolicyDocument:
-        Version: "2012-10-17"
+        Version: '2012-10-17'
         Statement:
           - Effect: Allow
             Principal:
               Service: lambda.amazonaws.com
-            Action:
-              - sts:AssumeRole
+            Action: 'sts:AssumeRole'
+      Path: /
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
       Policies:
-        - PolicyName: AllowSNSAccess
+        - PolicyName: SQSQueueAccess
           PolicyDocument:
-            Version: "2012-10-17"
+            Version: '2012-10-17'
             Statement:
               - Effect: Allow
                 Action:
-                  - sns:*
-                Resource: "*"
-        - PolicyName: AllowSQSAccess
+                  - 'sqs:*'
+                Resource: !Ref QueueArn
+        - PolicyName: SNSTopicAccess
           PolicyDocument:
-            Version: "2012-10-17"
+            Version: '2012-10-17'
             Statement:
               - Effect: Allow
                 Action:
-                  - sqs:*
-                Resource: "*"
+                  - 'sns:*'
+                Resource: !Ref TopicArn
         - PolicyName: MyLambdaFunctionPolicy
           PolicyDocument:
             Version: '2012-10-17'
