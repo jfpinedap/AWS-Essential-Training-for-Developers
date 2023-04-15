@@ -1,0 +1,44 @@
+AWSTemplateFormatVersion: 2010-09-09
+Resources:
+  MyLam bdaFunction:
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      FunctionName: my-lambda-function
+      Runtime: nodejs14.x
+      Handler: index.handler
+      Role: !GetAtt MyLambdaExecutionRole.Arn
+      Code:
+        ZipFile: |
+          exports.handler = async function(event) {
+            if (event.Records) {
+              console.log("S3 object created:", event.Records[0].s3.object.key);
+            } else {
+              console.log("Default message")
+            }
+          }
+
+  MyLambdaExecutionRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      RoleName: my-lambda-execution-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Path: /
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+      Policies:
+        - PolicyName: MyLambdaFunctionPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+            - Effect: Allow
+              Action:
+                - logs:CreateLogGroup
+                - logs:CreateLogStream
+                - logs:PutLogEvents
+              Resource: arn:aws:logs:*:*:*
