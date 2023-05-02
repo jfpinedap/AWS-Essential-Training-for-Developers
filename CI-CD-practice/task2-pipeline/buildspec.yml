@@ -1,0 +1,23 @@
+version: 0.2
+
+phases:
+  install:
+    runtime-versions:
+      python: 3.9
+    commands:
+      - pip install awscli
+      - pip install --upgrade pip
+  pre_build:
+    commands:
+      - pip install -r src/requirements.txt
+  build:
+    commands:
+      - echo Build started on `somewhere`
+      - python -m pytest tests/unit -v
+  post_build:
+    commands:
+      - echo Build completed on `somewhere`
+      - aws cloudformation package --template-file template.yaml --s3-bucket $S3_BUCKET --output-template-file packaged-template.yaml
+artifacts:
+  files:
+    - packaged-template.yaml

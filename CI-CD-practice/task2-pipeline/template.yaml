@@ -1,0 +1,76 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  my-sam-app
+
+  Sample SAM Template for my-sam-app
+
+Globals:
+  Function:
+    Timeout: 3
+    MemorySize: 128
+    Tracing: Active
+
+Parameters:
+  QueueArn:
+    Type: String
+    Description: The ARN of the SQS queue.
+  QueueUrl:
+    Type: String
+    Description: The name of the queue URL.
+  TopicArn:
+    Type: String
+    Description: The ARN of the SNS topic.
+
+Resources:
+  SamFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/
+      Handler: app.lambda_handler
+      Runtime: python3.9
+      Architectures:
+        - x86_64
+      Events:
+        UploadNotifier:
+          Type: Api
+          Properties:
+            Path: /sam-uploads-batch-notifier
+            Method: post
+      Policies:
+        - Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Action: "sqs:*"
+              Resource: !Ref QueueArn
+            - Effect: Allow
+              Action: "sns:*"
+              Resource: !Ref TopicArn
+      Environment:
+        Variables:
+          SNS_TOPIC_ARN: !Ref TopicArn
+          SQS_QUEUE_URL: !Ref QueueUrl
+
+  ApplicationResourceGroup:
+    Type: AWS::ResourceGroups::Group
+    Properties:
+      Name:
+        Fn::Sub: ApplicationInsights-SAM-${AWS::StackName}
+      ResourceQuery:
+        Type: CLOUDFORMATION_STACK_1_0
+  ApplicationInsightsMonitoring:
+    Type: AWS::ApplicationInsights::Application
+    Properties:
+      ResourceGroupName:
+        Ref: ApplicationResourceGroup
+      AutoConfigurationEnabled: "true"
+Outputs:
+  SamApi:
+    Description: API Gateway endpoint URL for Prod stage for SAM function
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/sam-uploads-batch-notifier/"
+  SamFunction:
+    Description: My SAM Lambda Function ARN
+    Value: !GetAtt SamFunction.Arn
+  SamFunctionIamRole:
+    Description: Implicit IAM Role created for SAM function
+    Value: !GetAtt SamFunctionRole.Arn
